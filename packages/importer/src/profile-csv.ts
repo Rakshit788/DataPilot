@@ -4,12 +4,14 @@ import { basename, resolve } from "node:path";
 import { parse } from "csv-parse";
 
 const sampleSize = 5;
+const distinctBitmapBits = 1 << 20;
 const sensitiveName = /email|phone|customer_name|first_name|last_name|address|street|zip|postal|ssn|social_security/i;
 const likelyKeyName = /(^id$|_id$|^id_)/i;
 
 type ColumnStats = {
   nulls: number;
-  distinct: Set<string>;
+  distinctBitmap: Uint8Array;
+  exactKeyValues: Set<string> | null;
   numbers: number;
   dates: number;
   booleans: number;
@@ -20,7 +22,29 @@ type ColumnStats = {
 };
 
 function emptyStats(): ColumnStats {
-  return { nulls: 0, distinct: new Set(), numbers: 0, dates: 0, booleans: 0, minNumber: null, maxNumber: null, minDate: null, maxDate: null };
+  return { nulls: 0, distinctBitmap: new Uint8Array(distinctBitmapBits >>> 3), exactKeyValues: null, numbers: 0, dates: 0, booleans: 0, minNumber: null, maxNumber: null, minDate: null, maxDate: null };
+}
+
+function hashValue(value: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index++) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function estimatedDistinct(bitmap: Uint8Array): number {
+  let occupied = 0;
+  for (const byte of bitmap) {
+    let value = byte;
+    while (value !== 0) {
+      occupied += value & 1;
+      value >>>= 1;
+    }
+  }
+  const empty = distinctBitmapBits - occupied;
+  return empty === 0 ? distinctBitmapBits : Math.round(-distinctBitmapBits * Math.log(empty / distinctBitmapBits));
 }
 
 function classifyType(stats: ColumnStats, rows: number): string {
@@ -35,7 +59,7 @@ function classifyType(stats: ColumnStats, rows: number): string {
 async function profileFile(filePath: string) {
   const columns: string[] = [];
   const stats = new Map<string, ColumnStats>();
-  const sample: Record<string, string>[] = [];
+  const rawSample: Record<string, string>[] = [];
   let rows = 0;
 
   const parser = createReadStream(filePath).pipe(parse({
@@ -45,7 +69,11 @@ async function profileFile(filePath: string) {
       const duplicates = cleaned.filter((header, index) => cleaned.indexOf(header) !== index);
       if (duplicates.length > 0) throw new Error(`Duplicate column names: ${[...new Set(duplicates)].join(", ")}`);
       columns.push(...cleaned);
-      for (const column of columns) stats.set(column, emptyStats());
+      for (const column of columns) {
+        const columnStats = emptyStats();
+        if (likelyKeyName.test(column)) columnStats.exactKeyValues = new Set();
+        stats.set(column, columnStats);
+      }
       return cleaned;
     },
     skip_empty_lines: true,
@@ -54,7 +82,7 @@ async function profileFile(filePath: string) {
 
   for await (const record of parser as AsyncIterable<Record<string, string>>) {
     rows++;
-    if (sample.length < sampleSize) sample.push(record);
+    if (rawSample.length < sampleSize) rawSample.push(record);
     for (const column of columns) {
       const value = record[column] ?? "";
       const columnStats = stats.get(column)!;
@@ -62,7 +90,9 @@ async function profileFile(filePath: string) {
         columnStats.nulls++;
         continue;
       }
-      columnStats.distinct.add(value);
+      const bitIndex = hashValue(value) & (distinctBitmapBits - 1);
+      columnStats.distinctBitmap[bitIndex >>> 3] |= 1 << (bitIndex & 7);
+      columnStats.exactKeyValues?.add(value);
       if (/^(true|false|yes|no)$/i.test(value)) columnStats.booleans++;
       const numeric = Number(value);
       if (value.trim() !== "" && Number.isFinite(numeric)) {
@@ -81,14 +111,14 @@ async function profileFile(filePath: string) {
   const columnProfiles = columns.map((name) => {
     const columnStats = stats.get(name)!;
     const type = classifyType(columnStats, rows);
-    const unique = rows > 0 && columnStats.distinct.size === rows && columnStats.nulls === 0;
+    const unique = rows > 0 && columnStats.exactKeyValues?.size === rows && columnStats.nulls === 0;
     const likelyKey = likelyKeyName.test(name);
     return {
       name,
       inferredType: type,
       nullCount: columnStats.nulls,
       nullPercent: rows === 0 ? 0 : Number(((columnStats.nulls / rows) * 100).toFixed(2)),
-      distinctCount: columnStats.distinct.size,
+      approximateDistinctCount: estimatedDistinct(columnStats.distinctBitmap),
       ...(type === "number" ? { min: columnStats.minNumber, max: columnStats.maxNumber } : {}),
       ...(type === "date/time" ? { min: columnStats.minDate, max: columnStats.maxDate } : {}),
       likelyPrimaryKey: likelyKey && unique,
@@ -96,6 +126,9 @@ async function profileFile(filePath: string) {
       sensitive: sensitiveName.test(name),
     };
   });
+  const sample = rawSample.map((record) => Object.fromEntries(
+    Object.entries(record).map(([name, value]) => [name, sensitiveName.test(name) ? "[REDACTED]" : value]),
+  ));
 
   return {
     file: basename(filePath),
