@@ -5,10 +5,12 @@ services:
       POSTGRES_DB: datapilot
       POSTGRES_USER: datapilot_app
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_local_only}
+      POSTGRES_READONLY_PASSWORD: ${POSTGRES_READONLY_PASSWORD:-change_me_reader_local_only}
     ports:
       - "5432:5432"
     volumes:
       - datapilot-postgres:/var/lib/postgresql/data
+      - ./packages/db/init/001-readonly-role.sql:/docker-entrypoint-initdb.d/001-readonly-role.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U datapilot_app -d datapilot"]
       interval: 5s
