@@ -1,0 +1,30 @@
+[
+  {
+    "id": "orders-by-status",
+    "question": "How many orders are there for each order status? Show the count by status.",
+    "table": "olist_orders_dataset",
+    "columns": ["order_id", "order_status"],
+    "sql": "SELECT order_status, count(order_id)::numeric AS order_count FROM olist_orders_dataset GROUP BY order_status ORDER BY order_status"
+  },
+  {
+    "id": "reviews-by-score",
+    "question": "How many reviews have each review score? Show the count by score.",
+    "table": "olist_order_reviews_dataset",
+    "columns": ["review_id", "review_score"],
+    "sql": "SELECT review_score, count(review_id)::numeric AS review_count FROM olist_order_reviews_dataset GROUP BY review_score ORDER BY review_score"
+  },
+  {
+    "id": "freight-by-seller",
+    "question": "Which sellers have the highest average freight cost per item? Show the top 10 sellers.",
+    "table": "olist_order_items_dataset",
+    "columns": ["seller_id", "freight_value"],
+    "sql": "SELECT seller_id, avg(freight_value)::numeric AS average_freight FROM olist_order_items_dataset GROUP BY seller_id ORDER BY average_freight DESC LIMIT 10"
+  },
+  {
+    "id": "payments-by-type",
+    "question": "How many payment records and how much payment value are there by payment type?",
+    "table": "olist_order_payments_dataset",
+    "columns": ["order_id", "payment_type", "payment_value"],
+    "sql": "SELECT payment_type, count(order_id)::numeric AS payment_count, sum(payment_value)::numeric AS total_value FROM olist_order_payments_dataset GROUP BY payment_type ORDER BY payment_type"
+  }
+]

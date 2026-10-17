@@ -167,6 +167,10 @@ export async function analyzeQuestion(input: { datasetId: string; conversationId
       if (step === maxSteps) throw new Error("The analysis reached its maximum tool-call steps.");
     }
 
+    if (sources.length > 0) {
+      const citations = [...new Set(sources.map((source) => `${source.sourceTable}:${source.sourceId}`))].slice(0, 8);
+      finalAnswer += `\n\nSources: ${citations.join(", ")}`;
+    }
     const durationMs = Math.round(performance.now() - startedAt);
     await pool.query("UPDATE analyses SET status = 'completed', duration_ms = $2, model_name = $3, chart_spec = $4, prompt_tokens = $5, response_tokens = $6 WHERE id = $1", [analysisId, durationMs, model, JSON.stringify(chart ?? null), promptTokens, responseTokens]);
     const response = { analysisId, conversationId, status: "completed", answer: finalAnswer, resultId: lastResultId, chart, sources, trace: traces, model, durationMs };

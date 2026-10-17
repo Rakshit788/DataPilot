@@ -139,6 +139,32 @@ CREATE TABLE IF NOT EXISTS scenarios (
   avoided numeric NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+CREATE TABLE IF NOT EXISTS evaluation_runs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  dataset_id uuid NOT NULL REFERENCES datasets(id) ON DELETE CASCADE,
+  status text NOT NULL CHECK (status IN ('running', 'completed', 'failed')),
+  total_cases integer NOT NULL DEFAULT 0,
+  passed_cases integer NOT NULL DEFAULT 0,
+  failed_cases integer NOT NULL DEFAULT 0,
+  skipped_cases integer NOT NULL DEFAULT 0,
+  duration_ms integer,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  completed_at timestamptz
+);
+CREATE TABLE IF NOT EXISTS evaluation_cases (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  run_id uuid NOT NULL REFERENCES evaluation_runs(id) ON DELETE CASCADE,
+  case_key text NOT NULL,
+  question text NOT NULL,
+  status text NOT NULL CHECK (status IN ('passed', 'failed', 'skipped')),
+  expected_rows jsonb,
+  actual_rows jsonb,
+  analysis_id uuid REFERENCES analyses(id) ON DELETE SET NULL,
+  result_id uuid REFERENCES query_results(id) ON DELETE SET NULL,
+  error text,
+  duration_ms integer NOT NULL DEFAULT 0,
+  UNIQUE (run_id, case_key)
+);
 CREATE TABLE IF NOT EXISTS document_indexes (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   dataset_id uuid NOT NULL REFERENCES datasets(id) ON DELETE CASCADE,
@@ -167,6 +193,7 @@ CREATE INDEX IF NOT EXISTS document_chunks_dataset_idx ON document_chunks(datase
 CREATE INDEX IF NOT EXISTS conversations_dataset_updated_idx ON conversations(dataset_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS messages_conversation_created_idx ON messages(conversation_id, created_at);
 CREATE INDEX IF NOT EXISTS analyses_conversation_created_idx ON analyses(conversation_id, created_at);
+CREATE INDEX IF NOT EXISTS evaluation_runs_dataset_created_idx ON evaluation_runs(dataset_id, created_at DESC);
 `;
 
 export async function ensureMetadataSchema() {

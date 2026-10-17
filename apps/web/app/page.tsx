@@ -30,6 +30,7 @@ type QueryResult = { columns: Array<{ name: string; dataTypeId?: number }>; rows
 type ChatResult = { analysisId: string; conversationId: string; answer: string; resultId: string | null; chart?: unknown; sources?: Array<{ sourceTable: string; sourceId: string; text: string; similarity: number }>; trace: Array<{ step: number; tool: string; status: string; durationMs: number; error?: string }>; model: string; durationMs: number };
 type ScenarioResult = { baseline: number; projected: number; avoided: number; formula: string; assumptions: { relativeReduction: number; measureColumn: string } };
 type Relationship = { id: string; sourceTable: string; sourceColumn: string; targetTable: string; targetColumn: string; cardinality: string; matchPercent: number | string; confidence: number | string; confirmed: boolean };
+type Evaluation = { runId: string; total: number; passed: number; failed: number; skipped: number; durationMs: number; cases: Array<{ id: string; question: string; status: string; reason?: string; error?: string; durationMs?: number }> };
 
 function Icon({ name }: { name: "grid" | "database" | "chart" | "settings" | "upload" | "search" | "spark" }) {
   const paths: Record<string, string> = {
@@ -72,6 +73,8 @@ export default function Home() {
   const [relationships, setRelationships] = useState<Relationship[]>([]);
   const [ragBusy, setRagBusy] = useState(false);
   const [ragMessage, setRagMessage] = useState("");
+  const [evaluation, setEvaluation] = useState<Evaluation | null>(null);
+  const [evaluationBusy, setEvaluationBusy] = useState(false);
 
   useEffect(() => {
     fetch("/api/datasets").then(async (response) => {
@@ -83,6 +86,7 @@ export default function Home() {
         setDatasetName(dataset.name);
         setProfiles(dataset.tables ?? []);
         setRelationships(dataset.relationships ?? []);
+        fetch(`/api/datasets/${dataset.id}/evaluations`).then((response) => response.json()).then((payload) => { if (payload.evaluation) setEvaluation({ runId: payload.evaluation.id, total: Number(payload.evaluation.total_cases), passed: Number(payload.evaluation.passed_cases), failed: Number(payload.evaluation.failed_cases), skipped: Number(payload.evaluation.skipped_cases), durationMs: Number(payload.evaluation.duration_ms), cases: payload.evaluation.cases ?? [] }); }).catch(() => undefined);
         fetch("/api/datasets/" + dataset.id + "/conversations").then((response) => response.json()).then(async (payload) => {
           const conversation = payload.conversation;
           if (!conversation) return;
@@ -115,6 +119,7 @@ export default function Home() {
       setDatasetName(result.dataset.name);
       setProfiles(result.dataset.tables);
       setRelationships(result.dataset.relationships ?? []);
+      setEvaluation(null);
       setSelected(0);
       setConversationId("");
       setChatResult(null);
@@ -138,6 +143,7 @@ export default function Home() {
       setDatasetName(result.dataset.name);
       setProfiles(result.dataset.tables);
       setRelationships(result.dataset.relationships ?? []);
+      setEvaluation(null);
       setSelected(0);
       setConversationId("");
       setChatResult(null);
@@ -172,6 +178,18 @@ export default function Home() {
       setRagMessage(`Indexed ${result.documents.toLocaleString()} documents into ${result.chunks.toLocaleString()} searchable chunks.`);
     } catch (cause) { setRagMessage(cause instanceof Error ? cause.message : "Could not index this table."); }
     finally { setRagBusy(false); }
+  }
+
+  async function runEvaluationSuite() {
+    if (!datasetId) return;
+    setEvaluationBusy(true); setChatError("");
+    try {
+      const response = await fetch(`/api/datasets/${datasetId}/evaluations`, { method: "POST" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Evaluation failed.");
+      setEvaluation(result);
+    } catch (cause) { setChatError(cause instanceof Error ? cause.message : "Evaluation failed."); }
+    finally { setEvaluationBusy(false); }
   }
 
   async function askQuestion(event: FormEvent<HTMLFormElement>) {
@@ -274,7 +292,8 @@ export default function Home() {
                 {relationships.length > 0 && <div className="relationship-list"><div className="relationship-heading"><div><span className="section-kicker">JOIN SUGGESTIONS</span><strong>Review table relationships</strong></div><span>{relationships.filter((relationship) => relationship.confirmed).length} confirmed</span></div>{relationships.map((relationship) => <div className="relationship-row" key={relationship.id}><span className="relationship-flow"><strong>{relationship.sourceTable}.{relationship.sourceColumn}</strong><b>→</b><strong>{relationship.targetTable}.{relationship.targetColumn}</strong></span><span className="relationship-match">{Number(relationship.matchPercent).toFixed(1)}% match · {relationship.cardinality.replace("_", " ")}</span><button className={relationship.confirmed ? "confirmed-button" : "subtle-button"} onClick={() => void confirmRelationship(relationship)}>{relationship.confirmed ? "✓ Confirmed" : "Review & confirm"}</button></div>)}</div>}
               </section>
               <section className="analyst-section" id="analyst">
-                <div className="section-header"><div><span className="section-kicker">DATA ANALYST</span><h2>Ask a question about your data</h2></div><span className="fresh-pill"><i /> OLLAMA · POSTGRESQL</span></div>
+                <div className="section-header"><div><span className="section-kicker">DATA ANALYST</span><h2>Ask a question about your data</h2></div><div className="analyst-actions"><span className="fresh-pill"><i /> OLLAMA · POSTGRESQL</span><button className="subtle-button" disabled={evaluationBusy} onClick={() => void runEvaluationSuite()}>{evaluationBusy ? "Evaluating…" : "Run evaluation"}</button></div></div>
+                {evaluation && <div className="evaluation-panel"><div><strong>Latest evaluation</strong><span>{evaluation.passed} passed · {evaluation.failed} failed · {evaluation.skipped} skipped · {(evaluation.durationMs / 1000).toFixed(1)}s</span></div><details><summary>Case details <span>{evaluation.total} cases</span></summary><ul>{evaluation.cases.map((item) => <li key={item.id}><b className={`evaluation-status ${item.status}`}>{item.status}</b><span>{item.question}</span><small>{item.error ?? item.reason ?? (item.durationMs ? `${item.durationMs} ms` : "")}</small></li>)}</ul></details></div>}
                 <form className="question-form" onSubmit={(event) => void askQuestion(event)}><textarea value={chatText} onChange={(event) => setChatText(event.target.value)} placeholder="Which categories have the highest average freight cost?" maxLength={4000} rows={2} /><div className="question-footer"><span>Answers are computed from your dataset and show the SQL used.</span><button className="primary-button" disabled={chatBusy || !chatText.trim()}><Icon name="spark" /> {chatBusy ? "Analyzing…" : "Ask DataPilot"}</button></div></form>
                 {chatError && <div className="error-message" role="alert">{chatError}</div>}
                 {chatResult && <div className="analysis-card"><div className="answer-header"><span className="answer-mark"><Icon name="spark" /></span><div><strong>DataPilot</strong><small>{chatResult.model} · {(chatResult.durationMs / 1000).toFixed(1)}s · {chatResult.analysisId.slice(0, 8)}</small></div>{chatResult.resultId && <a className="export-button" href={`/api/results/${chatResult.resultId}/export.csv`}>↓ Export CSV</a>}</div>

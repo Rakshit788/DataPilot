@@ -4,32 +4,38 @@ DataPilot is a local-first analytics workbench for exploring CSV datasets with d
 
 ## Current status
 
-The initial workspace dashboard and CSV profiling flow are implemented. The next milestone is persisting profiled datasets in PostgreSQL, then adding safe analytical queries and conversational follow-ups.
+DataPilot includes a local workspace, streaming CSV profiling, transactional PostgreSQL imports, a dataset-scoped read-only SQL boundary, Ollama tool orchestration, saved conversations/results/traces, charts, CSV export, deterministic what-if scenarios, pgvector-backed semantic search, and a reference-query evaluation suite.
 
 ## Local PostgreSQL
 
-1. Copy `.env.example` to `.env`. The example password is for local development; replace it in both `POSTGRES_PASSWORD` and `DATABASE_URL` before using a non-local database.
+1. Copy the root `.env.example` to `.env` for Docker Compose. Copy `apps/web/.env.example` to `apps/web/.env.local` for Next.js. Keep the app database URLs aligned with the matching PostgreSQL passwords.
 2. Start PostgreSQL with `docker compose up -d postgres`.
 3. Check readiness with `docker compose ps`.
 
-The database is available at `localhost:5432`, with database `datapilot` and local development role `datapilot_app`. The compose password is intended only for local development. Production and generated-query execution must use separate least-privilege roles, as described in the implementation guide.
+The database is available at `localhost:5432`, with application role `datapilot_app` and generated-query role `datapilot_reader`. The compose passwords are intended only for local development. PostgreSQL runs the read-only role initialization script when it creates a new data volume; if you already have an initialized volume, apply that role setup manually or reset the local volume before importing datasets.
 
-## CSV profiling
+## Import data
 
-Install the Node.js dependencies with `npm install`, then place Olist source CSV files under `data/raw/`. Run `npm run profile:csv` to print one JSON profile per CSV file, including row count, inferred column types, null percentages, approximate distinct counts, numeric/date ranges, likely key columns, sensitive-name flags, and up to five sample rows. To inspect another folder, pass its path: `npm run profile:csv -- ./path/to/csv-files`.
+Install dependencies with `npm install`. Upload one or more CSV files from the workspace, or put the eight Olist source files in `data/raw/` and choose **Load Olist demo data**. The Olist loader imports orders, items, payments, reviews, customers, products, sellers, and category translations; geolocation is deferred. Imported datasets use a generated PostgreSQL schema and normalized, typed table/column names. Source files and imported rows are not committed to Git.
 
-Profiles are generated on demand and are not saved to the database yet. Distinct counts are estimated with a fixed-size bitmap; key uniqueness checks are exact for columns whose names look like IDs. Sample values under sensitive-looking column names are redacted. Key and sensitivity labels are heuristic hints that need review; they are not confirmed relationships or a privacy classification.
+The profiler reports row counts, inferred types, null percentages, approximate distinct counts, numeric/date ranges, likely keys, and a safely sampled preview. Distinct counts are estimated with a fixed-size bitmap; key-candidate uniqueness checks are exact. Sensitive-looking fields are redacted in previews and excluded from model schema inspection.
 
 ## Web app
 
-Install dependencies with `npm install`, then run `npm run dev` and open the local URL printed by Next.js. The first screen lets you upload up to eight CSV files (50 MB each), profiles them on the server, and shows column types, missingness, likely keys, and a small redacted sample. Uploads are analyzed in memory and are not persisted yet.
+After PostgreSQL is ready, configure `OLLAMA_BASE_URL` and `OLLAMA_CHAT_MODEL` in `.env`, install/start Ollama, and pull the configured model. Run `npm run dev` and open the local URL printed by Next.js. CSV uploads are limited to 50 MB total and eight files. Imports run in a database transaction; invalid files roll back the dataset import.
 
-## Planned build order
+The analyst page sends natural-language questions to Ollama. Tool calls are validated, SQL is parsed as one `SELECT`, constrained to the selected dataset schema and non-sensitive columns, run with the dedicated reader role, a statement timeout, and a result cap. Answers show the executed query, stored result rows, tool trace, optional chart, and CSV export. Follow-ups reuse the stored conversation. The what-if control applies a deterministic relative reduction to a single-row numeric result and labels the output as a projection.
 
-1. Inspect and profile Olist source CSVs.
-2. Add repeatable migrations and a read-only analytics role.
-3. Implement guarded SQL execution.
-4. Connect Ollama with a bounded tool-call loop.
-5. Build the analyst interface, follow-ups, charts and CSV export.
+To enable text search, configure `OLLAMA_EMBED_MODEL` (default `nomic-embed-text`), pull that model in Ollama, and use a PostgreSQL image with pgvector support. Select a table and choose **Index text for search**; DataPilot indexes only profiled non-sensitive text columns and requires a likely unique source key. The analyst can retrieve semantic evidence and returns source table/row citations. SQL remains the source for numeric analysis.
+
+Choose **Run evaluation** to run the reference cases in `packages/evaluation/questions.json`. Cases unsupported by the current dataset schema are skipped. Supported cases execute an independent reference query and the analyst question, compare returned row values independent of row/column order, and persist timing, expected/actual rows, and run totals in PostgreSQL. The bundled suite targets Olist fields.
+
+The metadata schema is initialized on first API use. For a fresh Docker volume, the compose initialization script creates the `datapilot_reader` role. If you have an older initialized PostgreSQL volume, create the role from `packages/db/init/001-readonly-role.sql` and re-import datasets so that it receives schema/table grants.
+
+## Limits and next layers
+
+The app is currently a local single-workspace prototype with no user authentication or cross-user tenancy. Relationship suggestions require review, model-generated SQL can need a retry, and the model must be available locally. Dataset uploads store raw values in isolated schemas; sensitive-looking fields are hidden from generated-query tools and excluded from text indexing but remain available to the local database owner. Evaluation currently covers a small Olist-focused reference suite.
+
+See [DATAPILOT_IMPLEMENTATION_GUIDE.md](DATAPILOT_IMPLEMENTATION_GUIDE.md) for product scope, metric grain rules, source attribution, and reliability requirements.
 
 Do not put Olist source files, uploaded data, credentials, or generated results into Git.
