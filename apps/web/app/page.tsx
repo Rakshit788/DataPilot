@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import ResultsChart, { type ChartSpec } from "./results-chart";
+import ReconciliationPanel from "./reconciliation-panel";
 
 type Column = {
   name: string;
@@ -291,6 +292,7 @@ export default function Home() {
                 </div>
                 {relationships.length > 0 && <div className="relationship-list"><div className="relationship-heading"><div><span className="section-kicker">JOIN SUGGESTIONS</span><strong>Review table relationships</strong></div><span>{relationships.filter((relationship) => relationship.confirmed).length} confirmed</span></div>{relationships.map((relationship) => <div className="relationship-row" key={relationship.id}><span className="relationship-flow"><strong>{relationship.sourceTable}.{relationship.sourceColumn}</strong><b>→</b><strong>{relationship.targetTable}.{relationship.targetColumn}</strong></span><span className="relationship-match">{Number(relationship.matchPercent).toFixed(1)}% match · {relationship.cardinality.replace("_", " ")}</span><button className={relationship.confirmed ? "confirmed-button" : "subtle-button"} onClick={() => void confirmRelationship(relationship)}>{relationship.confirmed ? "✓ Confirmed" : "Review & confirm"}</button></div>)}</div>}
               </section>
+              {profiles.length > 1 && <ReconciliationPanel datasetId={datasetId} tables={profiles} />}
               <section className="analyst-section" id="analyst">
                 <div className="section-header"><div><span className="section-kicker">DATA ANALYST</span><h2>Ask a question about your data</h2></div><div className="analyst-actions"><span className="fresh-pill"><i /> OLLAMA · POSTGRESQL</span><button className="subtle-button" disabled={evaluationBusy} onClick={() => void runEvaluationSuite()}>{evaluationBusy ? "Evaluating…" : "Run evaluation"}</button></div></div>
                 {evaluation && <div className="evaluation-panel"><div><strong>Latest evaluation</strong><span>{evaluation.passed} passed · {evaluation.failed} failed · {evaluation.skipped} skipped · {(evaluation.durationMs / 1000).toFixed(1)}s</span></div><details><summary>Case details <span>{evaluation.total} cases</span></summary><ul>{evaluation.cases.map((item) => <li key={item.id}><b className={`evaluation-status ${item.status}`}>{item.status}</b><span>{item.question}</span><small>{item.error ?? item.reason ?? (item.durationMs ? `${item.durationMs} ms` : "")}</small></li>)}</ul></details></div>}

@@ -872,3 +872,27 @@ Call DataPilot MVP complete only when:
 **Build in this order: correct data import → safe SQL execution → real Ollama tool calling → correct results → follow-up context → charts/exports → deterministic what-if → RAG → evaluation.**
 
 A smaller end-to-end flow with correct numbers, visible evidence, and tested safety boundaries is more compelling than a large architecture where the AI tools are present but don't actually work.
+
+---
+
+## 24. Invoice and payment reconciliation extension
+
+This extension supports a separate invoice/payment CSV pilot when the user uploads both tables. Olist remains the e-commerce demo dataset and must not be described as an invoice ledger or as evidence of cash-application ROI.
+
+### Candidate matching
+
+1. The operator maps each table's unique row ID and numeric amount, then may select a shared invoice/customer/tax key and a remittance-note text column.
+2. Exact keys are compared server-side first. Sensitive keys are never placed in prompts, embeddings, match explanations, or the review UI.
+3. Only when no exact key candidate exists, the system searches indexed, non-sensitive invoice text with pgvector for a bounded candidate set.
+4. A deterministic reranker uses semantic similarity and payment-to-invoice amount agreement. It stores each candidate's score factors and rationale.
+5. Confidence at or above 0.85 creates a simulated straight-through match. Lower-confidence candidates enter the human review queue. No ledger write or external posting occurs in this prototype.
+
+### Human review and feedback
+
+- A reviewer can accept a suggested invoice, choose another returned candidate, or label the payment as unmatched.
+- The original prediction and confidence remain unchanged; the reviewer decision is stored separately as ground truth.
+- STP rate is auto-applied matches divided by processed payments.
+- Auto-match accuracy is computed only for straight-through matches with a human label; it is unavailable until labels exist.
+- Estimated hours saved equals straight-through matches multiplied by the operator-entered manual review baseline, divided by 60. It is an estimate, not measured ROI.
+- The panel re-evaluates these metrics from persisted labels whenever it loads and records a metric snapshot after each run and human decision. A larger pilot should add sampled audits, currency normalization, duplicate-payment handling, and an ERP posting integration with explicit approvals and idempotency controls.
+- One local run is capped at 5,000 payment rows and 200,000 invoice rows. Semantic coverage is limited by the text-indexing cap; exact-key comparison still checks the full supported invoice set.

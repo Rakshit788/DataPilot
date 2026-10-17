@@ -4,7 +4,7 @@ DataPilot is a local-first analytics workbench for exploring CSV datasets with d
 
 ## Current status
 
-DataPilot includes a local workspace, streaming CSV profiling, transactional PostgreSQL imports, a dataset-scoped read-only SQL boundary, Ollama tool orchestration, saved conversations/results/traces, charts, CSV export, deterministic what-if scenarios, pgvector-backed semantic search, and a reference-query evaluation suite.
+DataPilot includes a local workspace, streaming CSV profiling, transactional PostgreSQL imports, a dataset-scoped read-only SQL boundary, Ollama tool orchestration, saved conversations/results/traces, charts, CSV export, deterministic what-if scenarios, pgvector-backed semantic search, a reference-query evaluation suite, and a human-reviewed payment reconciliation workflow.
 
 ## Local PostgreSQL
 
@@ -30,11 +30,13 @@ To enable text search, configure `OLLAMA_EMBED_MODEL` (default `nomic-embed-text
 
 Choose **Run evaluation** to run the reference cases in `packages/evaluation/questions.json`. Cases unsupported by the current dataset schema are skipped. Supported cases execute an independent reference query and the analyst question, compare returned row values independent of row/column order, and persist timing, expected/actual rows, and run totals in PostgreSQL. The bundled suite targets Olist fields.
 
+For invoice/payment CSV pairs, upload both files into the same dataset, then use **Match remittances to invoices**. Select non-sensitive unique row IDs, numeric amounts, an optional exact key (such as invoice or tax ID), and a payment note. Exact keys are checked first; only payments without an exact key candidate fall back to invoice-table semantic search. Index non-sensitive invoice description text before using that fallback. The reranker weighs note similarity and amount agreement. Its score is a deterministic heuristic, not a calibrated probability. Scores at 85% or higher are marked simulated straight-through; lower-scoring candidates appear in human review. Human decisions are stored as labels, and the panel reports STP rate, accuracy on human-labeled auto matches, and estimated hours saved from the configured manual-review baseline. Each reviewer action stores a metric snapshot to show how labeled accuracy changes over time. This workflow does not connect to or write to a general ledger.
+
 The metadata schema is initialized on first API use. For a fresh Docker volume, the compose initialization script creates the `datapilot_reader` role. If you have an older initialized PostgreSQL volume, create the role from `packages/db/init/001-readonly-role.sql` and re-import datasets so that it receives schema/table grants.
 
 ## Limits and next layers
 
-The app is currently a local single-workspace prototype with no user authentication or cross-user tenancy. Relationship suggestions require review, model-generated SQL can need a retry, and the model must be available locally. Dataset uploads store raw values in isolated schemas; sensitive-looking fields are hidden from generated-query tools and excluded from text indexing but remain available to the local database owner. Evaluation currently covers a small Olist-focused reference suite.
+The app is currently a local single-workspace prototype with no user authentication or cross-user tenancy. Relationship suggestions require review, model-generated SQL can need a retry, and the model must be available locally. Dataset uploads store raw values in isolated schemas; sensitive-looking fields are hidden from generated-query tools and excluded from text indexing but remain available to the local database owner. Reconciliation supports up to 5,000 payments and 200,000 invoices per run; semantic candidate retrieval depends on the invoice text index, while exact keys are compared against the full invoice table. It is a local matching simulation with no ERP or ledger posting. The time-saved number is an estimate based on the manual review baseline, and accuracy is reported only for auto-matches with human-provided labels. Evaluation currently covers a small Olist-focused reference suite.
 
 See [DATAPILOT_IMPLEMENTATION_GUIDE.md](DATAPILOT_IMPLEMENTATION_GUIDE.md) for product scope, metric grain rules, source attribution, and reliability requirements.
 
