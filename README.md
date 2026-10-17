@@ -4,7 +4,7 @@ DataPilot is a local-first analytics workbench for exploring CSV datasets with d
 
 ## Current status
 
-The repository foundation is in place. The first implementation milestone is the data foundation: load and profile the Olist dataset, then expose reliable schema and relationship metadata before adding generated SQL.
+The repository foundation and a streaming CSV profiler are in place. The first implementation milestone is the data foundation: inspect and profile the Olist dataset, then expose reliable schema and relationship metadata before adding generated SQL.
 
 ## Local PostgreSQL
 
@@ -13,6 +13,12 @@ The repository foundation is in place. The first implementation milestone is the
 3. Check readiness with `docker compose ps`.
 
 The database is available at `localhost:5432`, with database `datapilot` and local development role `datapilot_app`. The compose password is intended only for local development. Production and generated-query execution must use separate least-privilege roles, as described in the implementation guide.
+
+## CSV profiling
+
+Install the Node.js dependencies with `npm install`, then place Olist source CSV files under `data/raw/`. Run `npm run profile:csv` to print one JSON profile per CSV file, including row count, inferred column types, null percentages, distinct counts, numeric/date ranges, likely key columns, sensitive-name flags, and up to five sample rows. To inspect another folder, pass its path: `npm run profile:csv -- ./path/to/csv-files`.
+
+Profiles are generated on demand and are not saved to the database yet. Key and sensitivity labels are heuristic hints that need review; they are not confirmed relationships or a privacy classification.
 
 ## Planned build order
 
