@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getLatestEvaluation, runEvaluation } from "../../../../../../../../packages/evaluation/run-evaluation.js";
+import { getLatestEvaluation, runEvaluation } from "../../../../../../../packages/evaluation/run-evaluation.js";
 
 export const runtime = "nodejs";
 

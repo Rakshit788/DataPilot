@@ -6,8 +6,8 @@ import { parse } from "csv-parse";
 
 const sampleSize = 5;
 const distinctBitmapBits = 1 << 20;
-const sensitiveName = /email|phone|customer_name|first_name|last_name|address|street|zip|postal|ssn|social_security/i;
-const candidateKeyName = /(^id$|_id$|^id_|_key$|_code$|^product_category_name$)/i;
+const sensitiveName = /email|phone|customer_name|first_name|last_name|address|street|zip|postal|ssn|social_security|tax.?id|taxpayer|vat.?id|\btin\b|\bein\b|bank.?account|routing/i;
+const candidateKeyName = /(^id$|_id$|^id_|_key$|_code$|^product_category_name$|(?:^|_)(invoice|bill|receipt|transaction|payment|document|reference)_?(id|no|number|key)$)/i;
 
 type ColumnStats = {
   nulls: number;

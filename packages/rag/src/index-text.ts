@@ -90,16 +90,30 @@ export async function indexDatasetText(input: { datasetId: string; tableName: st
   }
 }
 
-export async function searchDatasetText(datasetId: string, queryText: string, limit = 6) {
+export async function searchDatasetTexts(datasetId: string, queryTexts: string[], limit = 6, sourceTable?: string) {
   await ensureMetadataSchema();
-  const embedded = await embedTexts([queryText], "query");
-  const vector = vectorLiteral(embedded.embeddings[0]!);
-  const result = await getPool().query(
-    'SELECT c.source_table AS "sourceTable", c.source_id AS "sourceId", c.chunk_text AS text, c.source_metadata AS metadata, 1 - (c.embedding <=> $2::vector) AS similarity ' +
-    "FROM document_chunks c JOIN document_indexes i ON i.id = c.index_id " +
-    "WHERE c.dataset_id = $1 AND i.status = 'ready' AND c.embedding_model = $3 " +
-    "ORDER BY c.embedding <=> $2::vector LIMIT $4",
-    [datasetId, vector, embedded.model, Math.max(1, Math.min(limit, 10))],
-  );
-  return { model: embedded.model, sources: result.rows };
+  if (!queryTexts.length) return { model: process.env.OLLAMA_EMBED_MODEL ?? "nomic-embed-text", results: [] as Array<{ sources: unknown[] }> };
+  const embedded = await embedTexts(queryTexts, "query");
+  const results: Array<{ sources: unknown[] }> = [];
+  for (let offset = 0; offset < embedded.embeddings.length; offset += 8) {
+    const batch = embedded.embeddings.slice(offset, offset + 8);
+    const found = await Promise.all(batch.map(async (embedding) => {
+      const result = await getPool().query(
+        'SELECT "sourceTable", "sourceId", text, metadata, 1 - distance AS similarity FROM (' +
+        'SELECT DISTINCT ON (c.source_table,c.source_id) c.source_table AS "sourceTable", c.source_id AS "sourceId", c.chunk_text AS text, c.source_metadata AS metadata, c.embedding <=> $2::vector AS distance ' +
+        "FROM document_chunks c JOIN document_indexes i ON i.id = c.index_id " +
+        "WHERE c.dataset_id = $1 AND i.status = 'ready' AND c.embedding_model = $3 AND ($5::text IS NULL OR c.source_table = $5) " +
+        "ORDER BY c.source_table,c.source_id, c.embedding <=> $2::vector) ranked ORDER BY distance LIMIT $4",
+        [datasetId, vectorLiteral(embedding), embedded.model, Math.max(1, Math.min(limit, 10)), sourceTable ?? null],
+      );
+      return { sources: result.rows };
+    }));
+    results.push(...found);
+  }
+  return { model: embedded.model, results };
+}
+
+export async function searchDatasetText(datasetId: string, queryText: string, limit = 6, sourceTable?: string) {
+  const search = await searchDatasetTexts(datasetId, [queryText], limit, sourceTable);
+  return { model: search.model, sources: search.results[0]?.sources ?? [] };
 }

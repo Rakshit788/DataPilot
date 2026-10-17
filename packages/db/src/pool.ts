@@ -165,6 +165,55 @@ CREATE TABLE IF NOT EXISTS evaluation_cases (
   duration_ms integer NOT NULL DEFAULT 0,
   UNIQUE (run_id, case_key)
 );
+CREATE TABLE IF NOT EXISTS reconciliation_runs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  dataset_id uuid NOT NULL REFERENCES datasets(id) ON DELETE CASCADE,
+  payment_table text NOT NULL,
+  invoice_table text NOT NULL,
+  config jsonb NOT NULL,
+  status text NOT NULL CHECK (status IN ('running', 'completed', 'failed')),
+  total_payments integer NOT NULL DEFAULT 0,
+  stp_count integer NOT NULL DEFAULT 0,
+  review_count integer NOT NULL DEFAULT 0,
+  unmatched_count integer NOT NULL DEFAULT 0,
+  manual_review_minutes numeric(7,2) NOT NULL DEFAULT 3,
+  duration_ms integer,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  completed_at timestamptz
+);
+CREATE TABLE IF NOT EXISTS reconciliation_matches (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  run_id uuid NOT NULL REFERENCES reconciliation_runs(id) ON DELETE CASCADE,
+  payment_source_id text NOT NULL,
+  payment_amount numeric,
+  matched_invoice_id text,
+  invoice_amount numeric,
+  confidence numeric(6,5) NOT NULL DEFAULT 0,
+  exact_key_match boolean NOT NULL DEFAULT false,
+  rationale text NOT NULL DEFAULT '',
+  candidates jsonb NOT NULL DEFAULT '[]'::jsonb,
+  status text NOT NULL CHECK (status IN ('auto_applied', 'needs_review', 'approved', 'overridden', 'unmatched')),
+  straight_through boolean NOT NULL DEFAULT false,
+  human_reviewed boolean NOT NULL DEFAULT false,
+  human_invoice_id text,
+  human_decision text,
+  reviewed_at timestamptz,
+  review_duration_seconds numeric(8,2),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (run_id, payment_source_id)
+);
+CREATE INDEX IF NOT EXISTS reconciliation_runs_dataset_created_idx ON reconciliation_runs(dataset_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS reconciliation_matches_run_status_idx ON reconciliation_matches(run_id, status, confidence DESC);
+CREATE TABLE IF NOT EXISTS reconciliation_metric_snapshots (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  run_id uuid NOT NULL REFERENCES reconciliation_runs(id) ON DELETE CASCADE,
+  labeled_auto_count integer NOT NULL DEFAULT 0,
+  stp_rate numeric(7,6) NOT NULL DEFAULT 0,
+  accuracy_rate numeric(7,6),
+  estimated_hours_saved numeric(10,3) NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS reconciliation_snapshots_run_created_idx ON reconciliation_metric_snapshots(run_id, created_at DESC);
 CREATE TABLE IF NOT EXISTS document_indexes (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   dataset_id uuid NOT NULL REFERENCES datasets(id) ON DELETE CASCADE,
