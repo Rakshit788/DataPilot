@@ -17,6 +17,7 @@ export function getReadOnlyPool() {
 }
 
 const migrationSql = `
+CREATE EXTENSION IF NOT EXISTS vector;
 CREATE TABLE IF NOT EXISTS datasets (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL,
@@ -120,12 +121,14 @@ CREATE TABLE IF NOT EXISTS tool_traces (
   step integer NOT NULL,
   tool_name text NOT NULL,
   arguments_summary jsonb NOT NULL DEFAULT '{}'::jsonb,
+  result_summary jsonb NOT NULL DEFAULT '{}'::jsonb,
   status text NOT NULL,
   duration_ms integer,
   error_category text,
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (analysis_id, step)
 );
+ALTER TABLE tool_traces ADD COLUMN IF NOT EXISTS result_summary jsonb NOT NULL DEFAULT '{}'::jsonb;
 CREATE TABLE IF NOT EXISTS scenarios (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   result_id uuid NOT NULL REFERENCES query_results(id) ON DELETE CASCADE,
@@ -136,6 +139,31 @@ CREATE TABLE IF NOT EXISTS scenarios (
   avoided numeric NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+CREATE TABLE IF NOT EXISTS document_indexes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  dataset_id uuid NOT NULL REFERENCES datasets(id) ON DELETE CASCADE,
+  source_table text NOT NULL,
+  embedding_model text NOT NULL,
+  status text NOT NULL CHECK (status IN ('indexing', 'ready', 'failed', 'replaced')),
+  document_count integer NOT NULL DEFAULT 0,
+  chunk_count integer NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  completed_at timestamptz
+);
+CREATE TABLE IF NOT EXISTS document_chunks (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  index_id uuid NOT NULL REFERENCES document_indexes(id) ON DELETE CASCADE,
+  dataset_id uuid NOT NULL REFERENCES datasets(id) ON DELETE CASCADE,
+  source_table text NOT NULL,
+  source_id text NOT NULL,
+  chunk_text text NOT NULL,
+  source_metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  embedding vector(768) NOT NULL,
+  embedding_model text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (index_id, source_id, chunk_text)
+);
+CREATE INDEX IF NOT EXISTS document_chunks_dataset_idx ON document_chunks(dataset_id);
 CREATE INDEX IF NOT EXISTS conversations_dataset_updated_idx ON conversations(dataset_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS messages_conversation_created_idx ON messages(conversation_id, created_at);
 CREATE INDEX IF NOT EXISTS analyses_conversation_created_idx ON analyses(conversation_id, created_at);
