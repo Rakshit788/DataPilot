@@ -7,7 +7,7 @@ import { parse } from "csv-parse";
 const sampleSize = 5;
 const distinctBitmapBits = 1 << 20;
 const sensitiveName = /email|phone|customer_name|first_name|last_name|address|street|zip|postal|ssn|social_security/i;
-const likelyKeyName = /(^id$|_id$|^id_)/i;
+const candidateKeyName = /(^id$|_id$|^id_|_key$|_code$|^product_category_name$)/i;
 
 type ColumnStats = {
   nulls: number;
@@ -72,7 +72,7 @@ export async function profileCsvStream(source: Readable, fileName: string) {
       columns.push(...cleaned);
       for (const column of columns) {
         const columnStats = emptyStats();
-        if (likelyKeyName.test(column)) columnStats.exactKeyValues = new Set();
+        if (candidateKeyName.test(column)) columnStats.exactKeyValues = new Set();
         stats.set(column, columnStats);
       }
       return cleaned;
@@ -113,7 +113,7 @@ export async function profileCsvStream(source: Readable, fileName: string) {
     const columnStats = stats.get(name)!;
     const type = classifyType(columnStats, rows);
     const unique = rows > 0 && columnStats.exactKeyValues?.size === rows && columnStats.nulls === 0;
-    const likelyKey = likelyKeyName.test(name);
+    const likelyKey = candidateKeyName.test(name);
     return {
       name,
       inferredType: type,
