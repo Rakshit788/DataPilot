@@ -1,6 +1,7 @@
 import { createReadStream } from "node:fs";
 import { readdir } from "node:fs/promises";
-import { basename, resolve } from "node:path";
+import { resolve } from "node:path";
+import type { Readable } from "node:stream";
 import { parse } from "csv-parse";
 
 const sampleSize = 5;
@@ -56,13 +57,13 @@ function classifyType(stats: ColumnStats, rows: number): string {
   return "text";
 }
 
-async function profileFile(filePath: string) {
+export async function profileCsvStream(source: Readable, fileName: string) {
   const columns: string[] = [];
   const stats = new Map<string, ColumnStats>();
   const rawSample: Record<string, string>[] = [];
   let rows = 0;
 
-  const parser = createReadStream(filePath).pipe(parse({
+  const parser = source.pipe(parse({
     bom: true,
     columns: (headers: string[]) => {
       const cleaned = headers.map((header) => header.trim());
@@ -131,7 +132,7 @@ async function profileFile(filePath: string) {
   ));
 
   return {
-    file: basename(filePath),
+    file: fileName,
     rowCount: rows,
     columns: columnProfiles,
     likelyPrimaryKeys: columnProfiles.filter((column) => column.likelyPrimaryKey).map((column) => column.name),
@@ -140,16 +141,3 @@ async function profileFile(filePath: string) {
   };
 }
 
-const inputDir = resolve(process.argv[2] ?? "data/raw");
-const entries = await readdir(inputDir, { withFileTypes: true });
-const csvFiles = entries.filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".csv")).sort((a, b) => a.name.localeCompare(b.name));
-
-if (csvFiles.length === 0) {
-  console.error(`No CSV files found in ${inputDir}. Place source files in data/raw/ or pass a directory path.`);
-  process.exitCode = 1;
-} else {
-  for (const entry of csvFiles) {
-    const profile = await profileFile(resolve(inputDir, entry.name));
-    process.stdout.write(`${JSON.stringify(profile, null, 2)}\n`);
-  }
-}

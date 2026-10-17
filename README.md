@@ -4,7 +4,7 @@ DataPilot is a local-first analytics workbench for exploring CSV datasets with d
 
 ## Current status
 
-The repository foundation and a streaming CSV profiler are in place. The first implementation milestone is the data foundation: inspect and profile the Olist dataset, then expose reliable schema and relationship metadata before adding generated SQL.
+The initial workspace dashboard and CSV profiling flow are implemented. The next milestone is persisting profiled datasets in PostgreSQL, then adding safe analytical queries and conversational follow-ups.
 
 ## Local PostgreSQL
 
@@ -19,6 +19,10 @@ The database is available at `localhost:5432`, with database `datapilot` and loc
 Install the Node.js dependencies with `npm install`, then place Olist source CSV files under `data/raw/`. Run `npm run profile:csv` to print one JSON profile per CSV file, including row count, inferred column types, null percentages, approximate distinct counts, numeric/date ranges, likely key columns, sensitive-name flags, and up to five sample rows. To inspect another folder, pass its path: `npm run profile:csv -- ./path/to/csv-files`.
 
 Profiles are generated on demand and are not saved to the database yet. Distinct counts are estimated with a fixed-size bitmap; key uniqueness checks are exact for columns whose names look like IDs. Sample values under sensitive-looking column names are redacted. Key and sensitivity labels are heuristic hints that need review; they are not confirmed relationships or a privacy classification.
+
+## Web app
+
+Install dependencies with `npm install`, then run `npm run dev` and open the local URL printed by Next.js. The first screen lets you upload up to eight CSV files (50 MB each), profiles them on the server, and shows column types, missingness, likely keys, and a small redacted sample. Uploads are analyzed in memory and are not persisted yet.
 
 ## Planned build order
 
