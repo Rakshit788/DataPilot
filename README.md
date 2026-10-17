@@ -8,7 +8,7 @@ The repository foundation and a streaming CSV profiler are in place. The first i
 
 ## Local PostgreSQL
 
-1. Copy `.env.example` to `.env` and change `POSTGRES_PASSWORD` in your local environment if you expose the database beyond your machine.
+1. Copy `.env.example` to `.env`. The example password is for local development; replace it in both `POSTGRES_PASSWORD` and `DATABASE_URL` before using a non-local database.
 2. Start PostgreSQL with `docker compose up -d postgres`.
 3. Check readiness with `docker compose ps`.
 
