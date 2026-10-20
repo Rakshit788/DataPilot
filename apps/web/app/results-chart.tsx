@@ -17,7 +17,7 @@ export default function ResultsChart({ rows, columns, spec }: { rows: Record<str
   return <section className="result-chart"><h4>{spec.title}</h4><div className="chart-frame"><ResponsiveContainer width="100%" height="100%">
     {spec.type === "bar" ? <BarChart data={data} margin={{ top: 10, right: 12, bottom: 4, left: -12 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#edf0ed" />{xAxis}{yAxis}<Tooltip /><Bar dataKey={spec.yKey} fill="#477957" radius={[4, 4, 0, 0]} /></BarChart> :
       spec.type === "line" ? <LineChart data={data} margin={{ top: 10, right: 12, bottom: 4, left: -12 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#edf0ed" />{xAxis}{yAxis}<Tooltip /><Line type="monotone" dataKey={spec.yKey} stroke="#477957" strokeWidth={2} dot={{ r: 2 }} /></LineChart> :
-        spec.type === "pie" ? <PieChart><Tooltip /><Pie data={data} dataKey={spec.yKey} nameKey={spec.xKey} innerRadius={42} outerRadius={83} paddingAngle={2}>{data.map((_, index) => <Cell key={index} fill={colors[index % colors.length]} />)}</Pie></PieChart> :
+        spec.type === "pie" ? <PieChart><Tooltip /><Pie data={data} dataKey={spec.yKey} nameKey={spec.xKey} innerRadius={42} outerRadius={83} paddingAngle={2}>{data.map((_, index) => <Cell key={index} fill={colors[index % colors.length] ?? "#477957"} />)}</Pie></PieChart> :
           <ScatterChart margin={{ top: 10, right: 12, bottom: 4, left: -12 }}><CartesianGrid strokeDasharray="3 3" stroke="#edf0ed" />{xAxis}{yAxis}<Tooltip /><Scatter data={data} fill="#477957" /></ScatterChart>}
   </ResponsiveContainer></div></section>;
 }

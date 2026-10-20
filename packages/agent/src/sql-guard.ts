@@ -1,4 +1,4 @@
-import sqlParser from "node-sql-parser";
+import sqlParser, { type AST } from "node-sql-parser";
 import { ensureMetadataSchema, getPool, getReadOnlyPool } from "../../db/src/pool.js";
 import { quoteIdentifier } from "../../importer/src/identifiers.js";
 
@@ -21,7 +21,7 @@ function astObjects(value: unknown, visit: (object: Record<string, unknown>) => 
     for (const item of value) astObjects(item, visit);
     return;
   }
-  const object = value as Record<string, unknown>;
+  const object = value as unknown as Record<string, unknown>;
   visit(object);
   for (const child of Object.values(object)) astObjects(child, visit);
 }
@@ -47,7 +47,7 @@ function ensureReadOnlySelect(sql: string) {
   const astValue = parser.astify(sql, { database: "Postgresql" });
   const statements = Array.isArray(astValue) ? astValue : [astValue];
   if (statements.length !== 1) throw new Error("Only one SQL statement is allowed.");
-  const statement = statements[0] as Record<string, unknown>;
+  const statement = statements[0] as unknown as Record<string, unknown>;
   if (statement.type !== "select") throw new Error("Only read-only SELECT queries are allowed.");
   if (statement.into && typeof statement.into === "object" && (statement.into as Record<string, unknown>).position) {
     throw new Error("SELECT INTO is not allowed.");
@@ -63,10 +63,10 @@ function applyRowLimit(statement: Record<string, unknown>) {
   const limit = statement.limit as { value?: Array<{ type?: string; value?: number | string }> } | null;
   const value = limit?.value?.[0];
   const numericLimit = value ? Number(value.value) : null;
-  if (!limit || !Array.isArray(limit.value) || limit.value.length === 0 || !Number.isFinite(numericLimit) || numericLimit > maxRows) {
+  if (!limit || !Array.isArray(limit.value) || limit.value.length === 0 || numericLimit === null || !Number.isFinite(numericLimit) || numericLimit > maxRows) {
     statement.limit = { seperator: "", value: [{ type: "number", value: maxRows + 1 }] };
   }
-  return parser.sqlify(statement, { database: "Postgresql" });
+  return parser.sqlify(statement as unknown as AST, { database: "Postgresql" });
 }
 
 export async function runAnalyticsQuery({ datasetId, sql }: QueryExecution) {

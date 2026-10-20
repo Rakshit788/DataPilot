@@ -29,6 +29,13 @@ export async function POST(request: Request, context: { params: Promise<{ datase
   if (!z.string().uuid().safeParse(datasetId).success) return NextResponse.json({ error: "Invalid dataset ID." }, { status: 400 });
   const parsed = configSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Choose payment and invoice tables, their unique IDs and numeric amount columns." }, { status: 400 });
-  try { return NextResponse.json(await runReconciliation(datasetId, parsed.data), { status: 201 }); }
+  const { paymentNoteColumn, paymentKeyColumn, invoiceKeyColumn, ...requiredConfig } = parsed.data;
+  const config = {
+    ...requiredConfig,
+    ...(paymentNoteColumn === undefined ? {} : { paymentNoteColumn }),
+    ...(paymentKeyColumn === undefined ? {} : { paymentKeyColumn }),
+    ...(invoiceKeyColumn === undefined ? {} : { invoiceKeyColumn }),
+  };
+  try { return NextResponse.json(await runReconciliation(datasetId, config), { status: 201 }); }
   catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Reconciliation failed." }, { status: 422 }); }
 }

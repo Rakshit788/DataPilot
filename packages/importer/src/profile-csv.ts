@@ -92,7 +92,8 @@ export async function profileCsvStream(source: Readable, fileName: string) {
         continue;
       }
       const bitIndex = hashValue(value) & (distinctBitmapBits - 1);
-      columnStats.distinctBitmap[bitIndex >>> 3] |= 1 << (bitIndex & 7);
+      const bitmapByteIndex = bitIndex >>> 3;
+      columnStats.distinctBitmap[bitmapByteIndex] = (columnStats.distinctBitmap[bitmapByteIndex] ?? 0) | (1 << (bitIndex & 7));
       columnStats.exactKeyValues?.add(value);
       if (/^(true|false|yes|no)$/i.test(value)) columnStats.booleans++;
       const numeric = Number(value);
